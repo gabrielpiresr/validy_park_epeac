@@ -111,6 +111,8 @@ function HomePageContent() {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [qrFeedback, setQrFeedback] = useState("");
+  const [visibleStep, setVisibleStep] = useState<Step>("lookup");
+  const [stepAnimationState, setStepAnimationState] = useState<"enter" | "exit">("enter");
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerStreamRef = useRef<MediaStream | null>(null);
   const scannerLoopRef = useRef<number | null>(null);
@@ -129,6 +131,21 @@ function HomePageContent() {
   }, [now, paymentStart]);
 
   const canConfirmPayment = remainingSeconds === 0;
+
+  useEffect(() => {
+    if (step === visibleStep) {
+      setStepAnimationState("enter");
+      return;
+    }
+
+    setStepAnimationState("exit");
+    const animationTimer = setTimeout(() => {
+      setVisibleStep(step);
+      setStepAnimationState("enter");
+    }, 170);
+
+    return () => clearTimeout(animationTimer);
+  }, [step, visibleStep]);
 
   async function handleLookup() {
     setError("");
@@ -365,7 +382,12 @@ function HomePageContent() {
           Você parceiro da EPEAC garante R$25 pela diária. Siga as etapas para validar o seu ticket.
         </p>
 
-        {step === "lookup" && (
+        <div
+          className={`transition-all duration-200 ease-out ${
+            stepAnimationState === "enter" ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+          }`}
+        >
+        {visibleStep === "lookup" && (
           <div className="mt-6 space-y-3">
             <label className="block text-sm font-medium">Código do ticket</label>
             <input
@@ -405,7 +427,7 @@ function HomePageContent() {
           </div>
         )}
 
-        {step === "payment" && (
+        {visibleStep === "payment" && (
           <div className="mt-6 space-y-3">
             <p className="rounded-xl bg-slate-100 p-3 text-xs text-slate-700">
               Ticket encontrado: <strong>{ticketData?.n_ticket}</strong>
@@ -438,7 +460,7 @@ function HomePageContent() {
           </div>
         )}
 
-        {step === "confirm" && ticketData && (
+        {visibleStep === "confirm" && ticketData && (
           <div className="mt-6 space-y-3">
             {isTestMode && (
               <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
@@ -484,13 +506,14 @@ function HomePageContent() {
           </div>
         )}
 
-        {step === "done" && (
+        {visibleStep === "done" && (
           <div className="mt-6 space-y-2 rounded-xl bg-emerald-50 p-4 text-sm">
             <p className="font-medium text-emerald-800">Ticket validado com sucesso. Basta utilizar ele na saída.</p>
             <p>Nova placa gerada: <strong>{generatedPlate}</strong></p>
             <p>Nova tolerância aplicada: <strong>{newTolerance}</strong></p>
           </div>
         )}
+        </div>
 
         {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
       </section>
