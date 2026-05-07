@@ -33,6 +33,31 @@ function formatDateTime(dateValue?: string) {
   return date.toLocaleString("pt-BR");
 }
 
+function removeDiacritics(input: string) {
+  return input.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function createFakePlateFromName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const firstNameRaw = parts[0] ?? "";
+  const secondNameRaw = parts[1] ?? "";
+
+  const firstName = removeDiacritics(firstNameRaw).replace(/[^a-zA-Z]/g, "");
+  const secondName = removeDiacritics(secondNameRaw).replace(/[^a-zA-Z]/g, "");
+
+  const source = firstName.length >= 4 ? firstName : secondName || firstName;
+  const base = source.slice(0, 4).toUpperCase().padEnd(4, "X");
+
+  return `${base}123`;
+}
+
+function addOneDayToTolerance(tolerancia?: string) {
+  if (!tolerancia) return "";
+  const dt = new Date(tolerancia);
+  dt.setDate(dt.getDate() + 1);
+  return dt.toISOString();
+}
+
 function HomePageContent() {
   const searchParams = useSearchParams();
   const isTestMode = searchParams.get("is_test") === "true";
@@ -49,7 +74,7 @@ function HomePageContent() {
   const [generatedPlate, setGeneratedPlate] = useState("");
   const [newTolerance, setNewTolerance] = useState("");
   const [copiedFeedback, setCopiedFeedback] = useState(false);
-  const [testPreview, setTestPreview] = useState<{ url: string; payload: string } | null>(null);
+  const [testPreview, setTestPreview] = useState<{ url: string; payload: string; backendPayload: string } | null>(null);
 
   useEffect(() => {
     if (step !== "payment") return;
@@ -122,9 +147,27 @@ function HomePageContent() {
     const requestBody = { ticket: ticketData, fullName: fullName.trim() };
 
     if (isTestMode) {
+      const placaGerada = createFakePlateFromName(fullName.trim());
+      const backendPayload = {
+        n_ticket: ticketData.n_ticket,
+        tp_ticket: ticketData.tp_ticket,
+        placa: placaGerada,
+        dt_entrada: ticketData.dt_entrada,
+        tolerancia: ticketData.tolerancia,
+        add_min: 0,
+        add_hora: 0,
+        add_dia: 1,
+        indeterminado: false,
+        nova_tolerancia: addOneDayToTolerance(ticketData.tolerancia),
+        id_patio: null,
+        usuario: ticketData.usuario,
+        status: ticketData.status
+      };
+
       setTestPreview({
         url: requestUrl,
-        payload: JSON.stringify(requestBody, null, 2)
+        payload: JSON.stringify(requestBody, null, 2),
+        backendPayload: JSON.stringify(backendPayload, null, 2)
       });
       return;
     }
@@ -256,6 +299,8 @@ function HomePageContent() {
                 <p><strong>URL:</strong> {testPreview.url}</p>
                 <p><strong>Payload:</strong></p>
                 <pre className="overflow-x-auto rounded bg-white p-2">{testPreview.payload}</pre>
+                <p><strong>Payload exato da chamada do backend:</strong></p>
+                <pre className="overflow-x-auto rounded bg-white p-2">{testPreview.backendPayload}</pre>
                 <button
                   onClick={() => {
                     setGeneratedPlate("MODO-TESTE");
