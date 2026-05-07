@@ -25,7 +25,6 @@ function assertEnv() {
   if (!env.baseUrl) missing.push("TECHNEXT_BASE_URL");
   if (!env.username) missing.push("TECHNEXT_USERNAME");
   if (!env.password) missing.push("TECHNEXT_PASSWORD");
-  if (!runtimeToken) missing.push("TECHNEXT_TOKEN");
 
   if (missing.length > 0) {
     throw new Error(`Variáveis de ambiente ausentes: ${missing.join(", ")}`);
@@ -63,9 +62,14 @@ async function authenticate(): Promise<string> {
   return data.token;
 }
 
+async function getToken() {
+  if (runtimeToken) return runtimeToken;
+  return authenticate();
+}
+
 async function technextRequest(path: string, init: RequestInit = {}, attempt = 0): Promise<Response> {
   assertEnv();
-  const token = runtimeToken as string;
+  const token = await getToken();
 
   const response = await fetch(buildUrl(path), {
     ...init,
