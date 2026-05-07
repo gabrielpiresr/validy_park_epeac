@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { technextRequest, type TicketLookupResponse } from "@/app/lib";
+import { fetchTicket } from "@/src/lib/technext";
 
 export async function GET(_: Request, { params }: { params: { code: string } }) {
   try {
-    const ticket = await technextRequest<TicketLookupResponse>(`/tickets/${params.code}`);
+    const ticket = await fetchTicket(params.code);
     return NextResponse.json({ ticket });
   } catch (error) {
     return NextResponse.json(
