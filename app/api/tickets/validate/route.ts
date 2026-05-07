@@ -16,18 +16,18 @@ export async function POST(request: Request) {
 
     const placaGerada = createFakePlateFromName(body.fullName);
 
-    if (!body.ticket.tp_ticket || !body.ticket.dt_entrada || !body.ticket.tolerancia || !body.ticket.usuario || !body.ticket.status) {
+    if (!body.ticket.dt_entrada || !body.ticket.tolerancia) {
       return NextResponse.json({ message: "Dados do ticket incompletos para validação." }, { status: 400 });
     }
 
     const ticket: TechnextTicket = {
       n_ticket: body.ticket.n_ticket,
-      tp_ticket: body.ticket.tp_ticket,
+      tp_ticket: "A",
       placa: body.ticket.placa ?? "",
       dt_entrada: body.ticket.dt_entrada,
       tolerancia: body.ticket.tolerancia,
-      usuario: body.ticket.usuario,
-      status: body.ticket.status
+      usuario: "epeac.leandro.carvalho",
+      status: "V"
     };
     const result = await validateTicket(ticket, placaGerada);
 
