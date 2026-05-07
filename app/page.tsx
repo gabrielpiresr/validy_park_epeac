@@ -53,9 +53,25 @@ function createFakePlateFromName(fullName: string) {
 
 function addOneDayToTolerance(tolerancia?: string) {
   if (!tolerancia) return "";
-  const dt = new Date(tolerancia);
-  dt.setDate(dt.getDate() + 1);
-  return dt.toISOString();
+
+  const baseDate = new Date(tolerancia);
+  if (Number.isNaN(baseDate.getTime())) return "";
+
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const updated = new Date(baseDate.getTime() + oneDayMs);
+
+  const tzOffsetMinutes = -3 * 60;
+  const localMs = updated.getTime() + tzOffsetMinutes * 60 * 1000;
+  const localDate = new Date(localMs);
+
+  const year = localDate.getUTCFullYear();
+  const month = String(localDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(localDate.getUTCDate()).padStart(2, "0");
+  const hours = String(localDate.getUTCHours()).padStart(2, "0");
+  const minutes = String(localDate.getUTCMinutes()).padStart(2, "0");
+  const seconds = String(localDate.getUTCSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-03:00`;
 }
 
 function HomePageContent() {
@@ -150,7 +166,7 @@ function HomePageContent() {
       const placaGerada = createFakePlateFromName(fullName.trim());
       const backendPayload = {
         n_ticket: ticketData.n_ticket,
-        tp_ticket: ticketData.tp_ticket,
+        tp_ticket: "A",
         placa: placaGerada,
         dt_entrada: ticketData.dt_entrada,
         tolerancia: ticketData.tolerancia,
@@ -159,9 +175,9 @@ function HomePageContent() {
         add_dia: 1,
         indeterminado: false,
         nova_tolerancia: addOneDayToTolerance(ticketData.tolerancia),
-        id_patio: null,
-        usuario: ticketData.usuario,
-        status: ticketData.status
+        id_patio: 35,
+        usuario: "epeac.leandro.carvalho",
+        status: "V"
       };
 
       setTestPreview({
