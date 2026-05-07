@@ -315,7 +315,7 @@ function HomePageContent() {
   }, [isCameraOpen]);
 
   useEffect(() => {
-    if (!isCameraOpen || !scannerVideoRef.current || !scannerStreamRef.current) return;
+    if (!isCameraOpen || !isCameraPanelVisible || !scannerVideoRef.current || !scannerStreamRef.current) return;
 
     let isCancelled = false;
     const video = scannerVideoRef.current;
@@ -376,7 +376,7 @@ function HomePageContent() {
       isCancelled = true;
       stopScanner();
     };
-  }, [isCameraOpen]);
+  }, [isCameraOpen, isCameraPanelVisible]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-6">
