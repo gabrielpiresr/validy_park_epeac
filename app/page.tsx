@@ -215,7 +215,7 @@ function HomePageContent() {
         add_dia: 1,
         indeterminado: false,
         nova_tolerancia: addOneDayToTolerance(ticketData.tolerancia),
-        id_patio: 35,
+        id_patio: null,
         usuario: "epeac.leandro.carvalho",
         status: "V"
       };
