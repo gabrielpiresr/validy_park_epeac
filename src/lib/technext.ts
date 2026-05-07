@@ -194,15 +194,19 @@ export async function validateTicket(ticket: TechnextTicket, placaGerada: string
     status: "V"
   };
 
+  const endpoint = `/tickets/${ticket.n_ticket}/`;
   console.info("[technext] Validando ticket.", {
+    endpoint,
+    method: "PUT",
     n_ticket: payload.n_ticket,
     placa: payload.placa,
     tolerancia_atual: payload.tolerancia,
     nova_tolerancia: payload.nova_tolerancia,
-    status: payload.status
+    status: payload.status,
+    payload_completo: payload
   });
 
-  const res = await technextRequest(`/tickets/${ticket.n_ticket}/`, {
+  const res = await technextRequest(endpoint, {
     method: "PUT",
     body: JSON.stringify(payload)
   });
@@ -219,7 +223,8 @@ export async function validateTicket(ticket: TechnextTicket, placaGerada: string
   const updated = await res.json();
   console.info("[technext] Ticket validado com sucesso.", {
     n_ticket: ticket.n_ticket,
-    novaTolerancia
+    novaTolerancia,
+    resposta_put: updated
   });
   return { updated, novaTolerancia };
 }
