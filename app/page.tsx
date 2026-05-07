@@ -7,25 +7,35 @@ type Step = "lookup" | "payment" | "confirm" | "done";
 type TicketData = {
   n_ticket: string;
   tp_ticket?: string;
+  placa?: string;
   dt_entrada?: string;
-  tolerancia?: number;
+  tolerancia?: string;
   usuario?: string;
   status?: string;
 };
 
 const PAYMENT_WAIT_SECONDS = 10;
 
+function estimateTolerancePlusOneDay(tolerance?: string) {
+  if (!tolerance) return "-";
+  const date = new Date(tolerance);
+  if (Number.isNaN(date.getTime())) return `${tolerance} (+1 dia)`;
+  date.setDate(date.getDate() + 1);
+  return date.toLocaleString("pt-BR");
+}
+
 export default function HomePage() {
   const [step, setStep] = useState<Step>("lookup");
   const [ticketCode, setTicketCode] = useState("");
   const [ticketData, setTicketData] = useState<TicketData | null>(null);
   const [fullName, setFullName] = useState("");
-  const [plate, setPlate] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [paymentStart, setPaymentStart] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
   const [pixCopyPaste, setPixCopyPaste] = useState("");
+  const [generatedPlate, setGeneratedPlate] = useState("");
+  const [newTolerance, setNewTolerance] = useState("");
 
   useEffect(() => {
     if (step !== "payment") return;
@@ -81,8 +91,14 @@ export default function HomePage() {
     }
   }
 
-  async function handleApprove() {
+  async function handleValidateTicket() {
     setError("");
+
+    if (!ticketData) {
+      setError("Não foi possível validar o ticket");
+      return;
+    }
+
     if (fullName.trim().split(" ").length < 2) {
       setError("Digite seu nome completo para continuar.");
       return;
@@ -90,19 +106,20 @@ export default function HomePage() {
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/ticket/${ticketCode.trim()}/approve`, {
-        method: "PUT",
+      const response = await fetch("/api/tickets/validate", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName })
+        body: JSON.stringify({ ticket: ticketData, fullName: fullName.trim() })
       });
 
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.message || "Erro na aprovação.");
+      if (!response.ok) throw new Error(payload.message || "Não foi possível validar o ticket");
 
-      setPlate(payload.fakePlate);
+      setGeneratedPlate(payload.placaGerada || "-");
+      setNewTolerance(payload.nova_tolerancia || "-");
       setStep("done");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro inesperado.");
+    } catch {
+      setError("Não foi possível validar o ticket");
     } finally {
       setLoading(false);
     }
@@ -150,10 +167,7 @@ export default function HomePage() {
             <p className="text-xs text-slate-500">
               O PIX não será validado pelo sistema. O pagamento será conferido presencialmente ao lado do fiscal.
             </p>
-            <button
-              onClick={handleCopyPix}
-              className="w-full rounded-xl border border-slate-300 py-2"
-            >
+            <button onClick={handleCopyPix} className="w-full rounded-xl border border-slate-300 py-2">
               Copiar PIX
             </button>
             <button
@@ -171,8 +185,16 @@ export default function HomePage() {
           </div>
         )}
 
-        {step === "confirm" && (
+        {step === "confirm" && ticketData && (
           <div className="mt-6 space-y-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+              <p><strong>Resumo</strong></p>
+              <p>Número do ticket: {ticketData.n_ticket}</p>
+              <p>Placa original: {ticketData.placa || "-"}</p>
+              <p>Nova placa gerada: será definida na confirmação</p>
+              <p>Tolerância atual: {ticketData.tolerancia || "-"}</p>
+              <p>Nova tolerância estimada (+1 dia): {estimateTolerancePlusOneDay(ticketData.tolerancia)}</p>
+            </div>
             <label className="block text-sm font-medium">Nome completo</label>
             <input
               className="w-full rounded-xl border border-slate-300 px-3 py-2"
@@ -181,22 +203,20 @@ export default function HomePage() {
               onChange={(e) => setFullName(e.target.value)}
             />
             <button
-              onClick={handleApprove}
+              onClick={handleValidateTicket}
               disabled={loading}
               className="w-full rounded-xl bg-slate-900 py-2 font-medium text-white disabled:opacity-60"
             >
-              {loading ? "Confirmando..." : "Confirmar validação"}
+              {loading ? "Validando..." : "Confirmar validação"}
             </button>
           </div>
         )}
 
         {step === "done" && (
           <div className="mt-6 space-y-2 rounded-xl bg-emerald-50 p-4 text-sm">
-            <p className="font-medium text-emerald-800">Validação concluída!</p>
-            <p>
-              Placa gerada: <strong>{plate}</strong>
-            </p>
-            <p>Tolerância de +1 dia aplicada no ticket.</p>
+            <p className="font-medium text-emerald-800">Ticket validado com sucesso. Basta utilizar ele na saída.</p>
+            <p>Nova placa gerada: <strong>{generatedPlate}</strong></p>
+            <p>Nova tolerância aplicada: <strong>{newTolerance}</strong></p>
           </div>
         )}
 

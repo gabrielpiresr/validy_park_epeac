@@ -20,6 +20,7 @@ export async function POST(request: Request) {
       ticket: {
         n_ticket: ticket.n_ticket,
         tp_ticket: ticket.tp_ticket,
+        placa: ticket.placa,
         dt_entrada: ticket.dt_entrada,
         tolerancia: ticket.tolerancia,
         usuario: ticket.usuario,
