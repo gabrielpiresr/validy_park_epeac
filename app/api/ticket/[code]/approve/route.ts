@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildFakePlate, fetchTicket, validateTicket } from "@/src/lib/technext";
+import { createFakePlateFromName, fetchTicket, validateTicket } from "@/src/lib/technext";
 
 export async function PUT(request: Request, { params }: { params: { code: string } }) {
   try {
@@ -10,7 +10,7 @@ export async function PUT(request: Request, { params }: { params: { code: string
     }
 
     const ticket = await fetchTicket(params.code);
-    const fakePlate = buildFakePlate(body.fullName);
+    const fakePlate = createFakePlateFromName(body.fullName);
     const result = await validateTicket(ticket, fakePlate);
 
     return NextResponse.json({ ...result, fakePlate });

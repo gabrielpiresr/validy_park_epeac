@@ -1,4 +1,4 @@
-type TechnextTicket = {
+export type TechnextTicket = {
   n_ticket: string;
   tp_ticket: string;
   placa: string;
@@ -143,9 +143,20 @@ export async function validateTicket(ticket: TechnextTicket, placaGerada: string
   return { updated: await res.json(), novaTolerancia };
 }
 
-export function buildFakePlate(fullName: string) {
-  const clean = fullName.toUpperCase().replace(/[^A-Z]/g, "");
-  const letters = (clean + "AAA").slice(0, 3);
-  const sum = fullName.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0).toString();
-  return `${letters}${sum.padStart(4, "0").slice(-4)}`;
+function removeDiacritics(input: string) {
+  return input.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+export function createFakePlateFromName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const firstNameRaw = parts[0] ?? "";
+  const secondNameRaw = parts[1] ?? "";
+
+  const firstName = removeDiacritics(firstNameRaw).replace(/[^a-zA-Z]/g, "");
+  const secondName = removeDiacritics(secondNameRaw).replace(/[^a-zA-Z]/g, "");
+
+  const source = firstName.length >= 4 ? firstName : secondName || firstName;
+  const base = source.slice(0, 4).toUpperCase().padEnd(4, "X");
+
+  return `${base}123`;
 }
