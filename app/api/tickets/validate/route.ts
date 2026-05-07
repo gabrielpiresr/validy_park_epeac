@@ -1,6 +1,22 @@
 import { NextResponse } from "next/server";
 import { createFakePlateFromName, validateTicket, type TechnextTicket } from "@/src/lib/technext";
+import { appendValidationLog } from "@/src/lib/googleSheets";
 
+
+function getSaoPauloDateTime() {
+  const formatter = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
+
+  return formatter.format(new Date());
+}
 
 export async function POST(request: Request) {
   try {
@@ -30,6 +46,20 @@ export async function POST(request: Request) {
       status: "V"
     };
     const result = await validateTicket(ticket, placaGerada);
+
+    try {
+      await appendValidationLog({
+        dataEntrada: ticket.dt_entrada,
+        dataValidacao: getSaoPauloDateTime(),
+        numeroTicket: ticket.n_ticket,
+        nomeCompleto: body.fullName.trim()
+      });
+    } catch (sheetError) {
+      console.error("Falha ao registrar validação no Google Sheets.", {
+        numeroTicket: ticket.n_ticket,
+        error: sheetError instanceof Error ? sheetError.message : "Erro desconhecido"
+      });
+    }
 
     return NextResponse.json({
       success: true,
