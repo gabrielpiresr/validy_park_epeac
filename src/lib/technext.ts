@@ -208,6 +208,19 @@ export async function validateTicket(ticket: TechnextTicket, placaGerada: string
 
   const res = await technextRequest(endpoint, {
     method: "PUT",
+    headers: {
+      Origin: "https://validpark.technext.com.br",
+      Referer: "https://validpark.technext.com.br/",
+      "Accept-Language": "en-US,en;q=0.9,pt-BR;q=0.8,pt;q=0.7,es-CO;q=0.6,es;q=0.5,bs;q=0.4,bg;q=0.3,be;q=0.2",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+      "Sec-CH-UA": '"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
+      "Sec-CH-UA-Mobile": "?0",
+      "Sec-CH-UA-Platform": '"Windows"',
+      "Sec-Fetch-Dest": "empty",
+      "Sec-Fetch-Mode": "cors",
+      "Sec-Fetch-Site": "same-site"
+    },
     body: JSON.stringify(payload)
   });
 
