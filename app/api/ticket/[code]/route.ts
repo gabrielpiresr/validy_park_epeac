@@ -5,9 +5,9 @@ export async function GET(_: Request, { params }: { params: { code: string } }) 
   try {
     const ticket = await fetchTicket(params.code);
     return NextResponse.json({ ticket });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Erro ao buscar ticket" },
+      { message: "Não foi possível consultar o ticket no momento. Tente novamente." },
       { status: 500 }
     );
   }
