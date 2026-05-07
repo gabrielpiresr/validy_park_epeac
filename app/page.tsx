@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 type Step = "lookup" | "payment" | "confirm" | "done";
 
@@ -16,7 +16,24 @@ type TicketData = {
   status?: string;
 };
 
+type BarcodeDetectorLike = {
+  detect: (image: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
+};
+
+type BarcodeDetectorConstructorLike = new (options?: {
+  formats?: string[];
+}) => BarcodeDetectorLike;
+
 const PAYMENT_WAIT_SECONDS = 10;
+const TICKET_CODE_PATTERN = /^01\d{10}$/;
+
+function extractTicketCodeFromQr(rawValue: string) {
+  const cleaned = rawValue.trim();
+  if (TICKET_CODE_PATTERN.test(cleaned)) return cleaned;
+
+  const match = cleaned.match(/01\d{10}/);
+  return match?.[0] ?? null;
+}
 
 function estimateTolerancePlusOneDay(tolerance?: string) {
   if (!tolerance) return "-";
@@ -75,6 +92,12 @@ function HomePageContent() {
   const [newTolerance, setNewTolerance] = useState("");
   const [copiedFeedback, setCopiedFeedback] = useState(false);
   const [testPreview, setTestPreview] = useState<{ url: string; payload: string; backendPayload: string } | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [qrFeedback, setQrFeedback] = useState("");
+  const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerStreamRef = useRef<MediaStream | null>(null);
+  const scannerLoopRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (step !== "payment") return;
@@ -200,6 +223,114 @@ function HomePageContent() {
     setTimeout(() => setCopiedFeedback(false), 2000);
   }
 
+  function stopScanner() {
+    if (scannerLoopRef.current) {
+      cancelAnimationFrame(scannerLoopRef.current);
+      scannerLoopRef.current = null;
+    }
+
+    if (scannerStreamRef.current) {
+      scannerStreamRef.current.getTracks().forEach((track) => track.stop());
+      scannerStreamRef.current = null;
+    }
+
+    if (scannerVideoRef.current) {
+      scannerVideoRef.current.pause();
+      scannerVideoRef.current.srcObject = null;
+    }
+  }
+
+  async function handleOpenCamera() {
+    setCameraError("");
+    setQrFeedback("");
+
+    if (typeof window === "undefined" || !("BarcodeDetector" in window)) {
+      setCameraError("Leitura de QR Code não suportada neste navegador.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false
+      });
+
+      scannerStreamRef.current = stream;
+      setIsCameraOpen(true);
+    } catch {
+      setCameraError("Permissão de câmera negada. Digite o código manualmente.");
+    }
+  }
+
+  function handleCloseCamera() {
+    stopScanner();
+    setIsCameraOpen(false);
+  }
+
+  useEffect(() => {
+    if (!isCameraOpen || !scannerVideoRef.current || !scannerStreamRef.current) return;
+
+    let isCancelled = false;
+    const video = scannerVideoRef.current;
+    const stream = scannerStreamRef.current;
+    const BarcodeDetectorApi = (window as Window & { BarcodeDetector?: BarcodeDetectorConstructorLike }).BarcodeDetector;
+    if (!BarcodeDetectorApi) {
+      setCameraError("Leitura de QR Code não suportada neste navegador.");
+      handleCloseCamera();
+      return;
+    }
+    const detector = new BarcodeDetectorApi({ formats: ["qr_code"] });
+
+    async function runScanner() {
+      try {
+        video.srcObject = stream;
+        video.setAttribute("playsinline", "true");
+        await video.play();
+
+        const scan = async () => {
+          if (isCancelled) return;
+
+          try {
+            const barcodes = await detector.detect(video);
+            if (barcodes.length > 0) {
+              const rawValue = barcodes[0].rawValue ?? "";
+              const extractedCode = extractTicketCodeFromQr(rawValue);
+
+              if (extractedCode && TICKET_CODE_PATTERN.test(extractedCode)) {
+                setTicketCode(extractedCode);
+                setQrFeedback("QR Code lido com sucesso.");
+                handleCloseCamera();
+                return;
+              }
+
+              setQrFeedback("QR Code inválido. Digite o código manualmente.");
+              handleCloseCamera();
+              return;
+            }
+          } catch {
+            setQrFeedback("QR Code inválido. Digite o código manualmente.");
+            handleCloseCamera();
+            return;
+          }
+
+          scannerLoopRef.current = requestAnimationFrame(scan);
+        };
+
+        scannerLoopRef.current = requestAnimationFrame(scan);
+      } catch {
+        setCameraError("Não foi possível iniciar a câmera.");
+        handleCloseCamera();
+      }
+    }
+
+    runScanner();
+
+    return () => {
+      isCancelled = true;
+      stopScanner();
+    };
+  }, [isCameraOpen]);
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-6">
       <section className="w-full max-w-md rounded-2xl bg-white p-5 shadow-sm">
@@ -223,10 +354,31 @@ function HomePageContent() {
             <label className="block text-sm font-medium">Código do ticket</label>
             <input
               className="w-full rounded-xl border border-slate-300 px-3 py-2"
-              placeholder="Ex: TKT-12345"
+              placeholder="Ex: 010705110149"
               value={ticketCode}
               onChange={(e) => setTicketCode(e.target.value)}
             />
+            <button
+              onClick={handleOpenCamera}
+              type="button"
+              className="w-full rounded-xl border border-slate-300 py-2 font-medium"
+            >
+              Ler QR Code
+            </button>
+            {isCameraOpen && (
+              <div className="space-y-2 rounded-xl border border-slate-300 bg-slate-50 p-3">
+                <video ref={scannerVideoRef} className="h-64 w-full rounded-lg bg-black object-cover" muted />
+                <button
+                  onClick={handleCloseCamera}
+                  type="button"
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2 text-sm font-medium"
+                >
+                  Cancelar leitura
+                </button>
+              </div>
+            )}
+            {cameraError && <p className="text-sm text-red-600">{cameraError}</p>}
+            {qrFeedback && <p className="text-sm text-slate-600">{qrFeedback}</p>}
             <button
               onClick={handleLookup}
               disabled={loading}
