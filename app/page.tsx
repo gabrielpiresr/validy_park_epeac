@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 type Step = "lookup" | "payment" | "confirm" | "done";
 
@@ -25,7 +25,7 @@ function estimateTolerancePlusOneDay(tolerance?: string) {
   return date.toLocaleString("pt-BR");
 }
 
-export default function HomePage() {
+function HomePageContent() {
   const searchParams = useSearchParams();
   const isTestMode = searchParams.get("is_test") === "true";
 
@@ -258,5 +258,13 @@ export default function HomePage() {
         {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
       </section>
     </main>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={null}>
+      <HomePageContent />
+    </Suspense>
   );
 }
