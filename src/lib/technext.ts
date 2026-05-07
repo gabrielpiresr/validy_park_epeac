@@ -37,11 +37,31 @@ function buildUrl(path: string) {
   return `${base}${normalizedPath}`;
 }
 
+function sanitizeTicketForLog(ticket: Partial<TechnextTicket>) {
+  return {
+    n_ticket: ticket.n_ticket,
+    placa: ticket.placa,
+    dt_entrada: ticket.dt_entrada,
+    tolerancia: ticket.tolerancia,
+    status: ticket.status
+  };
+}
+
+async function readResponseBodySafe(response: Response) {
+  try {
+    const text = await response.clone().text();
+    return text.slice(0, 500);
+  } catch {
+    return "<body indisponível>";
+  }
+}
+
 async function authenticate(): Promise<string> {
   if (!env.baseUrl || !env.username || !env.password) {
     throw new Error("Configuração de autenticação incompleta da Technext.");
   }
 
+  console.info("[technext] Iniciando autenticação na Technext.");
   const res = await fetch(buildUrl("/api-token-auth/"), {
     method: "POST",
     headers: {
@@ -53,12 +73,15 @@ async function authenticate(): Promise<string> {
   });
 
   if (!res.ok) {
+    const body = await readResponseBodySafe(res);
+    console.error("[technext] Falha na autenticação.", { status: res.status, body });
     throw new Error(`Falha ao autenticar na Technext (${res.status})`);
   }
 
   const data = (await res.json()) as AuthResponse;
   if (!data.token) throw new Error("Token inválido retornado pela Technext.");
   runtimeToken = data.token;
+  console.info("[technext] Autenticação concluída com sucesso.");
   return data.token;
 }
 
@@ -70,6 +93,9 @@ async function getToken() {
 async function technextRequest(path: string, init: RequestInit = {}, attempt = 0): Promise<Response> {
   assertEnv();
   const token = await getToken();
+
+  const method = (init.method ?? "GET").toUpperCase();
+  console.info("[technext] Requisição iniciada.", { method, path, attempt });
 
   const response = await fetch(buildUrl(path), {
     ...init,
@@ -85,9 +111,10 @@ async function technextRequest(path: string, init: RequestInit = {}, attempt = 0
 
   if ([301, 302, 307, 308].includes(response.status)) {
     const location = response.headers.get("location");
+    console.warn("[technext] Redirecionamento recebido.", { method, path, status: response.status, location });
     if (location) {
       const redirectUrl = location.startsWith("http") ? location : buildUrl(location);
-      return fetch(redirectUrl, {
+      const redirectedResponse = await fetch(redirectUrl, {
         ...init,
         headers: {
           Accept: "application/json, text/plain, */*",
@@ -97,14 +124,23 @@ async function technextRequest(path: string, init: RequestInit = {}, attempt = 0
         },
         cache: "no-store"
       });
+      console.info("[technext] Resposta após redirecionamento.", { method, path, status: redirectedResponse.status });
+      return redirectedResponse;
     }
   }
 
   if ((response.status === 401 || response.status === 403) && attempt < 1) {
+    console.warn("[technext] Token expirado/negado. Tentando reautenticar.", {
+      method,
+      path,
+      status: response.status,
+      attempt
+    });
     await authenticate();
     return technextRequest(path, init, attempt + 1);
   }
 
+  console.info("[technext] Requisição finalizada.", { method, path, status: response.status, attempt });
   return response;
 }
 
@@ -128,9 +164,16 @@ function addOneDayToTolerance(tolerancia: string) {
 }
 
 export async function fetchTicket(ticketCode: string): Promise<TechnextTicket> {
+  console.info("[technext] Buscando ticket.", { ticketCode });
   const res = await technextRequest(`/buscatickets/${ticketCode}`);
-  if (!res.ok) throw new Error(`Erro ao buscar ticket (${res.status})`);
-  return (await res.json()) as TechnextTicket;
+  if (!res.ok) {
+    const body = await readResponseBodySafe(res);
+    console.error("[technext] Erro ao buscar ticket.", { ticketCode, status: res.status, body });
+    throw new Error(`Erro ao buscar ticket (${res.status})`);
+  }
+  const ticket = (await res.json()) as TechnextTicket;
+  console.info("[technext] Ticket encontrado.", sanitizeTicketForLog(ticket));
+  return ticket;
 }
 
 export async function validateTicket(ticket: TechnextTicket, placaGerada: string) {
@@ -151,13 +194,34 @@ export async function validateTicket(ticket: TechnextTicket, placaGerada: string
     status: "V"
   };
 
+  console.info("[technext] Validando ticket.", {
+    n_ticket: payload.n_ticket,
+    placa: payload.placa,
+    tolerancia_atual: payload.tolerancia,
+    nova_tolerancia: payload.nova_tolerancia,
+    status: payload.status
+  });
+
   const res = await technextRequest(`/tickets/${ticket.n_ticket}/`, {
     method: "PUT",
     body: JSON.stringify(payload)
   });
 
-  if (!res.ok) throw new Error(`Erro ao validar ticket (${res.status})`);
-  return { updated: await res.json(), novaTolerancia };
+  if (!res.ok) {
+    const body = await readResponseBodySafe(res);
+    console.error("[technext] Erro ao validar ticket.", {
+      n_ticket: ticket.n_ticket,
+      status: res.status,
+      body
+    });
+    throw new Error(`Erro ao validar ticket (${res.status})`);
+  }
+  const updated = await res.json();
+  console.info("[technext] Ticket validado com sucesso.", {
+    n_ticket: ticket.n_ticket,
+    novaTolerancia
+  });
+  return { updated, novaTolerancia };
 }
 
 function removeDiacritics(input: string) {
