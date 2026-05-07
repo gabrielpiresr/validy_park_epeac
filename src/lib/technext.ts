@@ -189,7 +189,7 @@ export async function validateTicket(ticket: TechnextTicket, placaGerada: string
     add_dia: 1,
     indeterminado: false,
     nova_tolerancia: novaTolerancia,
-    id_patio: 35,
+    id_patio: null,
     usuario: "epeac.leandro.carvalho",
     status: "V"
   };
