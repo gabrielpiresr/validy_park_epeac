@@ -109,9 +109,22 @@ async function technextRequest(path: string, init: RequestInit = {}, attempt = 0
 }
 
 function addOneDayToTolerance(tolerancia: string) {
-  const dt = new Date(tolerancia);
-  dt.setDate(dt.getDate() + 1);
-  return dt.toISOString();
+  const baseDate = new Date(tolerancia);
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const updated = new Date(baseDate.getTime() + oneDayMs);
+
+  const tzOffsetMinutes = -3 * 60;
+  const localMs = updated.getTime() + tzOffsetMinutes * 60 * 1000;
+  const localDate = new Date(localMs);
+
+  const year = localDate.getUTCFullYear();
+  const month = String(localDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(localDate.getUTCDate()).padStart(2, "0");
+  const hours = String(localDate.getUTCHours()).padStart(2, "0");
+  const minutes = String(localDate.getUTCMinutes()).padStart(2, "0");
+  const seconds = String(localDate.getUTCSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-03:00`;
 }
 
 export async function fetchTicket(ticketCode: string): Promise<TechnextTicket> {
@@ -124,7 +137,7 @@ export async function validateTicket(ticket: TechnextTicket, placaGerada: string
   const novaTolerancia = addOneDayToTolerance(ticket.tolerancia);
   const payload = {
     n_ticket: ticket.n_ticket,
-    tp_ticket: ticket.tp_ticket,
+    tp_ticket: "A",
     placa: placaGerada,
     dt_entrada: ticket.dt_entrada,
     tolerancia: ticket.tolerancia,
@@ -133,9 +146,9 @@ export async function validateTicket(ticket: TechnextTicket, placaGerada: string
     add_dia: 1,
     indeterminado: false,
     nova_tolerancia: novaTolerancia,
-    id_patio: null,
-    usuario: ticket.usuario,
-    status: ticket.status
+    id_patio: 35,
+    usuario: "epeac.leandro.carvalho",
+    status: "V"
   };
 
   const res = await technextRequest(`/tickets/${ticket.n_ticket}/`, {
