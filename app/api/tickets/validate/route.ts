@@ -1,5 +1,22 @@
 import { NextResponse } from "next/server";
 import { createFakePlateFromName, validateTicket, type TechnextTicket } from "@/src/lib/technext";
+import { appendValidationLog } from "@/src/lib/googleSheets";
+
+
+function getSaoPauloDateTime() {
+  const formatter = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
+
+  return formatter.format(new Date()).replace("T", " ");
+}
 
 export async function POST(request: Request) {
   try {
@@ -45,6 +62,25 @@ export async function POST(request: Request) {
       n_ticket: ticket.n_ticket,
       nova_tolerancia: result.novaTolerancia
     });
+
+    try {
+      const dataValidacao = getSaoPauloDateTime();
+      await appendValidationLog({
+        dataEntrada: ticket.dt_entrada,
+        dataValidacao,
+        numeroTicket: ticket.n_ticket,
+        nomeCompleto: body.fullName.trim()
+      });
+      console.info("[api/tickets/validate] Registro enviado para Google Sheets.", {
+        n_ticket: ticket.n_ticket,
+        data_validacao: dataValidacao
+      });
+    } catch (sheetsError) {
+      console.error("[api/tickets/validate] Falha ao registrar no Google Sheets.", {
+        n_ticket: ticket.n_ticket,
+        error: sheetsError instanceof Error ? sheetsError.message : "Erro desconhecido"
+      });
+    }
 
     return NextResponse.json({
       success: true,
