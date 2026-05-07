@@ -14,9 +14,9 @@ export async function PUT(request: Request, { params }: { params: { code: string
     const result = await validateTicket(ticket, fakePlate);
 
     return NextResponse.json({ ...result, fakePlate });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Erro ao aprovar ticket" },
+      { message: "Não foi possível aprovar o ticket no momento. Tente novamente." },
       { status: 500 }
     );
   }
