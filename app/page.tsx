@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 
@@ -25,6 +26,13 @@ function estimateTolerancePlusOneDay(tolerance?: string) {
   return date.toLocaleString("pt-BR");
 }
 
+function formatDateTime(dateValue?: string) {
+  if (!dateValue) return "-";
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return dateValue;
+  return date.toLocaleString("pt-BR");
+}
+
 function HomePageContent() {
   const searchParams = useSearchParams();
   const isTestMode = searchParams.get("is_test") === "true";
@@ -40,6 +48,7 @@ function HomePageContent() {
   const [pixCopyPaste, setPixCopyPaste] = useState("");
   const [generatedPlate, setGeneratedPlate] = useState("");
   const [newTolerance, setNewTolerance] = useState("");
+  const [copiedFeedback, setCopiedFeedback] = useState(false);
   const [testPreview, setTestPreview] = useState<{ url: string; payload: string } | null>(null);
 
   useEffect(() => {
@@ -144,13 +153,27 @@ function HomePageContent() {
   async function handleCopyPix() {
     if (!pixCopyPaste) return;
     await navigator.clipboard.writeText(pixCopyPaste);
+    setCopiedFeedback(true);
+    setTimeout(() => setCopiedFeedback(false), 2000);
   }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-6">
       <section className="w-full max-w-md rounded-2xl bg-white p-5 shadow-sm">
+        <div className="mb-4 rounded-xl bg-[#0F2D63] px-4 py-3">
+          <Image
+            src="https://epeac.com.br/wp-content/uploads/2025/07/Camada_1-8-1.png"
+            alt="Logo EPEAC"
+            width={180}
+            height={48}
+            className="h-10 w-auto"
+            priority
+          />
+        </div>
         <h1 className="text-xl font-semibold">Pagamento e validação do ticket</h1>
-        <p className="mt-1 text-sm text-slate-500">Digite o código do seu ticket</p>
+        <p className="mt-1 text-sm text-slate-500">
+          Você parceiro da EPEAC garante R$25 pela diária. Siga as etapas para validar o seu ticket.
+        </p>
 
         {step === "lookup" && (
           <div className="mt-6 space-y-3">
@@ -175,6 +198,8 @@ function HomePageContent() {
           <div className="mt-6 space-y-3">
             <p className="rounded-xl bg-slate-100 p-3 text-xs text-slate-700">
               Ticket encontrado: <strong>{ticketData?.n_ticket}</strong>
+              <br />
+              Entrada: <strong>{formatDateTime(ticketData?.dt_entrada)}</strong>
             </p>
             <label className="block text-sm font-medium">PIX copia e cola</label>
             <div className="break-all rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs">
@@ -184,8 +209,9 @@ function HomePageContent() {
               O PIX não será validado pelo sistema. O pagamento será conferido presencialmente ao lado do fiscal.
             </p>
             <button onClick={handleCopyPix} className="w-full rounded-xl border border-slate-300 py-2">
-              Copiar PIX
+              {copiedFeedback ? "Copiado para a área de transferência!" : "Copiar PIX"}
             </button>
+            {copiedFeedback && <p className="text-center text-xs text-emerald-600">Código PIX copiado com sucesso.</p>}
             <button
               onClick={() => setStep("confirm")}
               disabled={!canConfirmPayment}
@@ -209,14 +235,6 @@ function HomePageContent() {
                 <p>Ao clicar em <strong>Confirmar validação</strong>, nenhuma chamada de validação será enviada e nenhum dado será alterado externamente.</p>
               </div>
             )}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-              <p><strong>Resumo</strong></p>
-              <p>Número do ticket: {ticketData.n_ticket}</p>
-              <p>Placa original: {ticketData.placa || "-"}</p>
-              <p>Nova placa gerada: será definida na confirmação</p>
-              <p>Tolerância atual: {ticketData.tolerancia || "-"}</p>
-              <p>Nova tolerância estimada (+1 dia): {estimateTolerancePlusOneDay(ticketData.tolerancia)}</p>
-            </div>
             <label className="block text-sm font-medium">Nome completo</label>
             <input
               className="w-full rounded-xl border border-slate-300 px-3 py-2"
