@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 type Step = "lookup" | "payment" | "confirm" | "done";
 
@@ -24,7 +25,10 @@ function estimateTolerancePlusOneDay(tolerance?: string) {
   return date.toLocaleString("pt-BR");
 }
 
-export default function HomePage() {
+function HomePageContent() {
+  const searchParams = useSearchParams();
+  const isTestMode = searchParams.get("is_test") === "true";
+
   const [step, setStep] = useState<Step>("lookup");
   const [ticketCode, setTicketCode] = useState("");
   const [ticketData, setTicketData] = useState<TicketData | null>(null);
@@ -36,6 +40,7 @@ export default function HomePage() {
   const [pixCopyPaste, setPixCopyPaste] = useState("");
   const [generatedPlate, setGeneratedPlate] = useState("");
   const [newTolerance, setNewTolerance] = useState("");
+  const [testPreview, setTestPreview] = useState<{ url: string; payload: string } | null>(null);
 
   useEffect(() => {
     if (step !== "payment") return;
@@ -104,12 +109,23 @@ export default function HomePage() {
       return;
     }
 
+    const requestUrl = "/api/tickets/validate";
+    const requestBody = { ticket: ticketData, fullName: fullName.trim() };
+
+    if (isTestMode) {
+      setTestPreview({
+        url: requestUrl,
+        payload: JSON.stringify(requestBody, null, 2)
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await fetch("/api/tickets/validate", {
+      const response = await fetch(requestUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticket: ticketData, fullName: fullName.trim() })
+        body: JSON.stringify(requestBody)
       });
 
       const payload = await response.json();
@@ -209,6 +225,25 @@ export default function HomePage() {
             >
               {loading ? "Validando..." : "Confirmar validação"}
             </button>
+
+            {isTestMode && testPreview && (
+              <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs">
+                <p className="font-semibold text-amber-800">Modo teste ativo: validação externa ignorada.</p>
+                <p><strong>URL:</strong> {testPreview.url}</p>
+                <p><strong>Payload:</strong></p>
+                <pre className="overflow-x-auto rounded bg-white p-2">{testPreview.payload}</pre>
+                <button
+                  onClick={() => {
+                    setGeneratedPlate("MODO-TESTE");
+                    setNewTolerance(estimateTolerancePlusOneDay(ticketData.tolerancia));
+                    setStep("done");
+                  }}
+                  className="w-full rounded-xl bg-amber-600 py-2 font-medium text-white"
+                >
+                  Seguir para tela de sucesso
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -223,5 +258,13 @@ export default function HomePage() {
         {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
       </section>
     </main>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={null}>
+      <HomePageContent />
+    </Suspense>
   );
 }
