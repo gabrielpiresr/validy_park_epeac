@@ -109,6 +109,8 @@ function HomePageContent() {
   const [copiedFeedback, setCopiedFeedback] = useState(false);
   const [testPreview, setTestPreview] = useState<{ url: string; payload: string; backendPayload: string } | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isCameraPanelVisible, setIsCameraPanelVisible] = useState(false);
+  const [cameraPanelAnimationState, setCameraPanelAnimationState] = useState<"enter" | "exit">("enter");
   const [cameraError, setCameraError] = useState("");
   const [qrFeedback, setQrFeedback] = useState("");
   const [visibleStep, setVisibleStep] = useState<Step>("lookup");
@@ -289,6 +291,7 @@ function HomePageContent() {
       });
 
       scannerStreamRef.current = stream;
+      setCameraPanelAnimationState("exit");
       setIsCameraOpen(true);
     } catch {
       setCameraError("Permissão de câmera negada. Digite o código manualmente.");
@@ -297,11 +300,22 @@ function HomePageContent() {
 
   function handleCloseCamera() {
     stopScanner();
-    setIsCameraOpen(false);
+    setCameraPanelAnimationState("exit");
+    setTimeout(() => {
+      setIsCameraOpen(false);
+      setIsCameraPanelVisible(false);
+    }, 200);
   }
 
   useEffect(() => {
-    if (!isCameraOpen || !scannerVideoRef.current || !scannerStreamRef.current) return;
+    if (!isCameraOpen) return;
+    setIsCameraPanelVisible(true);
+    const timer = setTimeout(() => setCameraPanelAnimationState("enter"), 10);
+    return () => clearTimeout(timer);
+  }, [isCameraOpen]);
+
+  useEffect(() => {
+    if (!isCameraOpen || !isCameraPanelVisible || !scannerVideoRef.current || !scannerStreamRef.current) return;
 
     let isCancelled = false;
     const video = scannerVideoRef.current;
@@ -362,7 +376,7 @@ function HomePageContent() {
       isCancelled = true;
       stopScanner();
     };
-  }, [isCameraOpen]);
+  }, [isCameraOpen, isCameraPanelVisible]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-6">
@@ -399,12 +413,30 @@ function HomePageContent() {
             <button
               onClick={handleOpenCamera}
               type="button"
-              className="w-full rounded-xl border border-slate-300 py-2 font-medium"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 py-2 font-medium transition-colors duration-200 hover:bg-slate-50"
             >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                className="h-4 w-4"
+                aria-hidden="true"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 7.5h3l1.5-2.25h7.5l1.5 2.25h3A1.5 1.5 0 0 1 21.75 9v9A1.5 1.5 0 0 1 20.25 19.5H3.75A1.5 1.5 0 0 1 2.25 18V9a1.5 1.5 0 0 1 1.5-1.5Z" />
+                <circle cx="12" cy="13.5" r="3.25" />
+              </svg>
               Ler QR Code
             </button>
-            {isCameraOpen && (
-              <div className="space-y-2 rounded-xl border border-slate-300 bg-slate-50 p-3">
+            {isCameraPanelVisible && (
+              <div
+                className={`space-y-2 rounded-xl border border-slate-300 bg-slate-50 p-3 transition-all duration-200 ease-out ${
+                  cameraPanelAnimationState === "enter"
+                    ? "translate-y-0 scale-100 opacity-100"
+                    : "translate-y-1 scale-[0.98] opacity-0"
+                }`}
+              >
                 <video ref={scannerVideoRef} className="h-64 w-full rounded-lg bg-black object-cover" muted />
                 <button
                   onClick={handleCloseCamera}
