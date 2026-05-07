@@ -203,6 +203,12 @@ function HomePageContent() {
 
         {step === "confirm" && ticketData && (
           <div className="mt-6 space-y-3">
+            {isTestMode && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                <p className="font-semibold">Modo teste ativo</p>
+                <p>Ao clicar em <strong>Confirmar validação</strong>, nenhuma chamada de validação será enviada e nenhum dado será alterado externamente.</p>
+              </div>
+            )}
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
               <p><strong>Resumo</strong></p>
               <p>Número do ticket: {ticketData.n_ticket}</p>
