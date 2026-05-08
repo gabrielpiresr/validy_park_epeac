@@ -18,7 +18,7 @@ function getSaoPauloDateTime() {
   return formatter.format(new Date()).replace("T", " ");
 }
 
-export async function POST(request: Request) {
+export async function PUT(request: Request) {
   try {
     console.info("[api/tickets/validate] Início da validação de ticket.");
     const body = (await request.json()) as { ticket?: Partial<TechnextTicket>; fullName?: string };

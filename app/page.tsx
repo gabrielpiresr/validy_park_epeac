@@ -218,8 +218,8 @@ function HomePageContent() {
         indeterminado: false,
         nova_tolerancia: addOneDayToTolerance(ticketData.tolerancia),
         id_patio: null,
-        usuario: "epeac.leandro.carvalho",
-        status: "V"
+        usuario: "AVULSO",
+        status: "A"
       };
 
       setTestPreview({
@@ -233,7 +233,7 @@ function HomePageContent() {
     setLoading(true);
     try {
       const response = await fetch(requestUrl, {
-        method: "POST",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody)
       });
