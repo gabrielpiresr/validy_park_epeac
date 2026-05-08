@@ -48,8 +48,8 @@ export async function POST(request: Request) {
       placa: body.ticket.placa ?? "",
       dt_entrada: body.ticket.dt_entrada,
       tolerancia: body.ticket.tolerancia,
-      usuario: "epeac.leandro.carvalho",
-      status: "V"
+      usuario: body.ticket.usuario ?? "",
+      status: body.ticket.status ?? ""
     };
 
     console.info("[api/tickets/validate] Chamando validateTicket.", {
