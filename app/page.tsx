@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
-type Step = "lookup" | "payment" | "confirm" | "done";
+type Step = "lookup" | "identify" | "payment" | "done";
 
 type TicketData = {
   n_ticket: string;
@@ -68,29 +68,6 @@ function createFakePlateFromName(fullName: string) {
   return `${base}123`;
 }
 
-function addOneDayToTolerance(tolerancia?: string) {
-  if (!tolerancia) return "";
-
-  const baseDate = new Date(tolerancia);
-  if (Number.isNaN(baseDate.getTime())) return "";
-
-  const oneDayMs = 24 * 60 * 60 * 1000;
-  const updated = new Date(baseDate.getTime() + oneDayMs);
-
-  const tzOffsetMinutes = -3 * 60;
-  const localMs = updated.getTime() + tzOffsetMinutes * 60 * 1000;
-  const localDate = new Date(localMs);
-
-  const year = localDate.getUTCFullYear();
-  const month = String(localDate.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(localDate.getUTCDate()).padStart(2, "0");
-  const hours = String(localDate.getUTCHours()).padStart(2, "0");
-  const minutes = String(localDate.getUTCMinutes()).padStart(2, "0");
-  const seconds = String(localDate.getUTCSeconds()).padStart(2, "0");
-
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-03:00`;
-}
-
 function HomePageContent() {
   const searchParams = useSearchParams();
   const isTestMode = searchParams.get("is_test") === "true";
@@ -102,12 +79,12 @@ function HomePageContent() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [paymentStart, setPaymentStart] = useState<number | null>(null);
+  const [hasCopiedPix, setHasCopiedPix] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [pixCopyPaste, setPixCopyPaste] = useState("");
   const [generatedPlate, setGeneratedPlate] = useState("");
   const [newTolerance, setNewTolerance] = useState("");
   const [copiedFeedback, setCopiedFeedback] = useState(false);
-  const [testPreview, setTestPreview] = useState<{ url: string; payload: string; backendPayload: string } | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isCameraPanelVisible, setIsCameraPanelVisible] = useState(false);
   const [cameraPanelAnimationState, setCameraPanelAnimationState] = useState<"enter" | "exit">("enter");
@@ -118,21 +95,20 @@ function HomePageContent() {
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerStreamRef = useRef<MediaStream | null>(null);
   const scannerLoopRef = useRef<number | null>(null);
+  const autoValidationStartedRef = useRef(false);
 
   useEffect(() => {
-    if (step !== "payment") return;
+    if (step !== "payment" || !paymentStart) return;
 
     const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
-  }, [step]);
+  }, [paymentStart, step]);
 
   const remainingSeconds = useMemo(() => {
     if (!paymentStart) return PAYMENT_WAIT_SECONDS;
     const elapsed = Math.floor((now - paymentStart) / 1000);
     return Math.max(PAYMENT_WAIT_SECONDS - elapsed, 0);
   }, [now, paymentStart]);
-
-  const canConfirmPayment = remainingSeconds === 0;
 
   useEffect(() => {
     if (step === visibleStep) {
@@ -169,20 +145,46 @@ function HomePageContent() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Não foi possível buscar o ticket.");
 
-      const pixRes = await fetch("/api/pix");
-      const pixPayload = await pixRes.json();
-      if (!pixRes.ok) throw new Error(pixPayload.message || "Erro ao carregar PIX.");
-
       setTicketData(payload.ticket);
-      setPixCopyPaste(pixPayload.pixCopyPaste || "");
-      setPaymentStart(Date.now());
-      setStep("payment");
+      setFullName("");
+      setPixCopyPaste("");
+      setPaymentStart(null);
+      setHasCopiedPix(false);
+      autoValidationStartedRef.current = false;
+      setStep("identify");
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
           : "Não conseguimos buscar seu ticket agora. Tente novamente em instantes."
       );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleConfirmFullName() {
+    setError("");
+
+    if (fullName.trim().split(/\s+/).length < 2) {
+      setError("Digite seu nome completo para continuar.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const pixRes = await fetch("/api/pix");
+      const pixPayload = await pixRes.json();
+      if (!pixRes.ok) throw new Error(pixPayload.message || "Erro ao carregar PIX.");
+
+      setPixCopyPaste(pixPayload.pixCopyPaste || "");
+      setPaymentStart(null);
+      setHasCopiedPix(false);
+      autoValidationStartedRef.current = false;
+      setNow(Date.now());
+      setStep("payment");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao carregar PIX.");
     } finally {
       setLoading(false);
     }
@@ -196,7 +198,7 @@ function HomePageContent() {
       return;
     }
 
-    if (fullName.trim().split(" ").length < 2) {
+    if (fullName.trim().split(/\s+/).length < 2) {
       setError("Digite seu nome completo para continuar.");
       return;
     }
@@ -205,28 +207,9 @@ function HomePageContent() {
     const requestBody = { ticket: ticketData, fullName: fullName.trim() };
 
     if (isTestMode) {
-      const placaGerada = createFakePlateFromName(fullName.trim());
-      const backendPayload = {
-        n_ticket: ticketData.n_ticket,
-        tp_ticket: "A",
-        placa: placaGerada,
-        dt_entrada: ticketData.dt_entrada,
-        tolerancia: ticketData.tolerancia,
-        add_min: 0,
-        add_hora: 0,
-        add_dia: 1,
-        indeterminado: false,
-        nova_tolerancia: addOneDayToTolerance(ticketData.tolerancia),
-        id_patio: null,
-        usuario: "AVULSO",
-        status: "A"
-      };
-
-      setTestPreview({
-        url: requestUrl,
-        payload: JSON.stringify(requestBody, null, 2),
-        backendPayload: JSON.stringify(backendPayload, null, 2)
-      });
+      setGeneratedPlate(createFakePlateFromName(fullName.trim()));
+      setNewTolerance(estimateTolerancePlusOneDay(ticketData.tolerancia));
+      setStep("done");
       return;
     }
 
@@ -252,11 +235,30 @@ function HomePageContent() {
   }
 
   async function handleCopyPix() {
-    if (!pixCopyPaste) return;
+    if (!pixCopyPaste || loading) return;
     await navigator.clipboard.writeText(pixCopyPaste);
+    const copiedAt = Date.now();
+    setHasCopiedPix(true);
+    setPaymentStart((current) => current ?? copiedAt);
+    setNow(copiedAt);
     setCopiedFeedback(true);
     setTimeout(() => setCopiedFeedback(false), 2000);
   }
+
+  useEffect(() => {
+    if (
+      step !== "payment" ||
+      !hasCopiedPix ||
+      !paymentStart ||
+      remainingSeconds > 0 ||
+      autoValidationStartedRef.current
+    ) {
+      return;
+    }
+
+    autoValidationStartedRef.current = true;
+    handleValidateTicket();
+  }, [hasCopiedPix, paymentStart, remainingSeconds, step]);
 
   function stopScanner() {
     if (scannerLoopRef.current) {
@@ -459,10 +461,39 @@ function HomePageContent() {
           </div>
         )}
 
+        {visibleStep === "identify" && ticketData && (
+          <div className="mt-6 space-y-3">
+            <p className="rounded-xl bg-slate-100 p-3 text-xs text-slate-700">
+              Ticket encontrado: <strong>{ticketData.n_ticket}</strong>
+              <br />
+              Entrada: <strong>{formatDateTime(ticketData.dt_entrada)}</strong>
+            </p>
+            <p className="text-sm text-slate-600">
+              Informe seu nome completo antes de visualizar o PIX. Ele será usado para validar o ticket automaticamente.
+            </p>
+            <label className="block text-sm font-medium">Nome completo</label>
+            <input
+              className="w-full rounded-xl border border-slate-300 px-3 py-2"
+              placeholder="Digite seu nome completo"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+            <button
+              onClick={handleConfirmFullName}
+              disabled={loading}
+              className="w-full rounded-xl bg-slate-900 py-2 font-medium text-white disabled:opacity-60"
+            >
+              {loading ? "Carregando PIX..." : "Confirmar nome e ver PIX"}
+            </button>
+          </div>
+        )}
+
         {visibleStep === "payment" && (
           <div className="mt-6 space-y-3">
             <p className="rounded-xl bg-slate-100 p-3 text-xs text-slate-700">
               Ticket encontrado: <strong>{ticketData?.n_ticket}</strong>
+              <br />
+              Nome: <strong>{fullName}</strong>
               <br />
               Entrada: <strong>{formatDateTime(ticketData?.dt_entrada)}</strong>
             </p>
@@ -471,69 +502,30 @@ function HomePageContent() {
               {pixCopyPaste || "PIX indisponível no momento."}
             </div>
             <p className="text-xs text-slate-500">
-              O PIX não será validado pelo sistema. O pagamento será conferido presencialmente ao lado do fiscal.
+              Copie o PIX para iniciar a validação automática do ticket. O sistema validará o ticket 10 segundos após a cópia, sem precisar clicar em mais nada.
             </p>
-            <button onClick={handleCopyPix} className="w-full rounded-xl border border-slate-300 py-2">
+            <button
+              onClick={handleCopyPix}
+              disabled={loading || !pixCopyPaste}
+              className="w-full rounded-xl border border-slate-300 py-2 disabled:opacity-60"
+            >
               {copiedFeedback ? "Copiado para a área de transferência!" : "Copiar PIX"}
             </button>
             {copiedFeedback && <p className="text-center text-xs text-emerald-600">Código PIX copiado com sucesso.</p>}
-            <button
-              onClick={() => setStep("confirm")}
-              disabled={!canConfirmPayment}
-              className="w-full rounded-xl bg-emerald-600 py-2 font-medium text-white disabled:opacity-50"
-            >
-              Já fiz o Pix
-            </button>
-            {!canConfirmPayment && (
+            {!hasCopiedPix && (
               <p className="text-center text-xs text-slate-500">
-                Aguarde {remainingSeconds}s para liberar a próxima etapa.
+                Após copiar o PIX, a validação automática será feita em 10 segundos.
               </p>
             )}
-          </div>
-        )}
-
-        {visibleStep === "confirm" && ticketData && (
-          <div className="mt-6 space-y-3">
-            {isTestMode && (
-              <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-                <p className="font-semibold">Modo teste ativo</p>
-                <p>Ao clicar em <strong>Confirmar validação</strong>, nenhuma chamada de validação será enviada e nenhum dado será alterado externamente.</p>
-              </div>
+            {hasCopiedPix && remainingSeconds > 0 && (
+              <p className="text-center text-xs text-slate-500">
+                Validando automaticamente em {remainingSeconds}s. Não é necessário clicar em mais nada.
+              </p>
             )}
-            <label className="block text-sm font-medium">Nome completo</label>
-            <input
-              className="w-full rounded-xl border border-slate-300 px-3 py-2"
-              placeholder="Digite seu nome"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-            />
-            <button
-              onClick={handleValidateTicket}
-              disabled={loading}
-              className="w-full rounded-xl bg-slate-900 py-2 font-medium text-white disabled:opacity-60"
-            >
-              {loading ? "Validando..." : "Confirmar validação"}
-            </button>
-
-            {isTestMode && testPreview && (
-              <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs">
-                <p className="font-semibold text-amber-800">Modo teste ativo: validação externa ignorada.</p>
-                <p><strong>URL:</strong> {testPreview.url}</p>
-                <p><strong>Payload:</strong></p>
-                <pre className="overflow-x-auto rounded bg-white p-2">{testPreview.payload}</pre>
-                <p><strong>Payload exato da chamada do backend:</strong></p>
-                <pre className="overflow-x-auto rounded bg-white p-2">{testPreview.backendPayload}</pre>
-                <button
-                  onClick={() => {
-                    setGeneratedPlate("MODO-TESTE");
-                    setNewTolerance(estimateTolerancePlusOneDay(ticketData.tolerancia));
-                    setStep("done");
-                  }}
-                  className="w-full rounded-xl bg-amber-600 py-2 font-medium text-white"
-                >
-                  Seguir para tela de sucesso
-                </button>
-              </div>
+            {hasCopiedPix && remainingSeconds === 0 && (
+              <p className="text-center text-xs text-emerald-700">
+                {loading ? "Validando ticket automaticamente..." : "Iniciando validação automática..."}
+              </p>
             )}
           </div>
         )}
