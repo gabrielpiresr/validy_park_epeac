@@ -42,13 +42,14 @@ Use as variáveis abaixo (server-side):
 
 1. Usuário informa o código do ticket.
 2. Backend consulta ticket na Technext (`POST /api/tickets/search`).
-3. Frontend busca PIX no backend (`GET /api/pix`).
-4. Usuário copia PIX e confirma pagamento.
-5. Usuário informa nome completo.
-6. Backend gera placa fictícia e valida ticket (`POST /api/tickets/validate`).
-7. Após sucesso do PUT de validação, backend registra log na aba `validacoes` do Google Sheets (A:data_entrada, B:data_validacao, C:numero_ticket, D:nome_completo).
-8. Se o Google Sheets falhar, a validação permanece concluída; o erro é apenas logado no servidor.
-9. Tela final exibe nova placa e nova tolerância.
+3. Usuário informa e confirma o nome completo antes de visualizar o PIX.
+4. Frontend busca PIX no backend (`GET /api/pix`).
+5. Usuário copia o PIX, ou aguarda caso não copie.
+6. Após a cópia, o frontend valida automaticamente em 10 segundos; se o usuário não copiar, a contagem começa 10 segundos depois, validando em até 20 segundos sem clique de confirmação.
+7. Backend gera placa fictícia e valida ticket (`POST /api/tickets/validate`).
+8. Após sucesso do PUT de validação, backend registra log na aba `validacoes` do Google Sheets (A:data_entrada, B:data_validacao, C:numero_ticket, D:nome_completo).
+9. Se o Google Sheets falhar, a validação permanece concluída; o erro é apenas logado no servidor.
+10. Tela final exibe nova placa e nova tolerância.
 
 ## Deploy na Vercel
 
