@@ -25,6 +25,7 @@ type BarcodeDetectorConstructorLike = new (options?: {
 }) => BarcodeDetectorLike;
 
 const PAYMENT_WAIT_SECONDS = 10;
+const AUTO_COUNTDOWN_DELAY_SECONDS = 10;
 const TICKET_CODE_PATTERN = /^01\d{10}$/;
 
 function extractTicketCodeFromQr(rawValue: string) {
@@ -103,6 +104,18 @@ function HomePageContent() {
     const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
   }, [paymentStart, step]);
+
+  useEffect(() => {
+    if (step !== "payment" || hasCopiedPix || paymentStart) return;
+
+    const fallbackTimer = setTimeout(() => {
+      const startedAt = Date.now();
+      setPaymentStart(startedAt);
+      setNow(startedAt);
+    }, AUTO_COUNTDOWN_DELAY_SECONDS * 1000);
+
+    return () => clearTimeout(fallbackTimer);
+  }, [hasCopiedPix, paymentStart, step]);
 
   const remainingSeconds = useMemo(() => {
     if (!paymentStart) return PAYMENT_WAIT_SECONDS;
@@ -246,13 +259,7 @@ function HomePageContent() {
   }
 
   useEffect(() => {
-    if (
-      step !== "payment" ||
-      !hasCopiedPix ||
-      !paymentStart ||
-      remainingSeconds > 0 ||
-      autoValidationStartedRef.current
-    ) {
+    if (step !== "payment" || !paymentStart || remainingSeconds > 0 || autoValidationStartedRef.current) {
       return;
     }
 
@@ -468,9 +475,7 @@ function HomePageContent() {
               <br />
               Entrada: <strong>{formatDateTime(ticketData.dt_entrada)}</strong>
             </p>
-            <p className="text-sm text-slate-600">
-              Informe seu nome completo antes de visualizar o PIX. Ele será usado para validar o ticket automaticamente.
-            </p>
+            <p className="text-sm text-slate-600">Informe seu nome completo para liberar o PIX.</p>
             <label className="block text-sm font-medium">Nome completo</label>
             <input
               className="w-full rounded-xl border border-slate-300 px-3 py-2"
@@ -501,9 +506,7 @@ function HomePageContent() {
             <div className="break-all rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs">
               {pixCopyPaste || "PIX indisponível no momento."}
             </div>
-            <p className="text-xs text-slate-500">
-              Copie o PIX para iniciar a validação automática do ticket. O sistema validará o ticket 10 segundos após a cópia, sem precisar clicar em mais nada.
-            </p>
+            <p className="text-xs text-slate-500">Copie o PIX. A validação será automática.</p>
             <button
               onClick={handleCopyPix}
               disabled={loading || !pixCopyPaste}
@@ -512,17 +515,15 @@ function HomePageContent() {
               {copiedFeedback ? "Copiado para a área de transferência!" : "Copiar PIX"}
             </button>
             {copiedFeedback && <p className="text-center text-xs text-emerald-600">Código PIX copiado com sucesso.</p>}
-            {!hasCopiedPix && (
+            {!paymentStart && (
               <p className="text-center text-xs text-slate-500">
-                Após copiar o PIX, a validação automática será feita em 10 segundos.
+                Se não copiar, a contagem começa em {AUTO_COUNTDOWN_DELAY_SECONDS}s.
               </p>
             )}
-            {hasCopiedPix && remainingSeconds > 0 && (
-              <p className="text-center text-xs text-slate-500">
-                Validando automaticamente em {remainingSeconds}s. Não é necessário clicar em mais nada.
-              </p>
+            {paymentStart && remainingSeconds > 0 && (
+              <p className="text-center text-xs text-slate-500">Validando automaticamente em {remainingSeconds}s.</p>
             )}
-            {hasCopiedPix && remainingSeconds === 0 && (
+            {paymentStart && remainingSeconds === 0 && (
               <p className="text-center text-xs text-emerald-700">
                 {loading ? "Validando ticket automaticamente..." : "Iniciando validação automática..."}
               </p>

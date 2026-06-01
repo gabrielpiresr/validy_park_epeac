@@ -44,8 +44,8 @@ Use as variáveis abaixo (server-side):
 2. Backend consulta ticket na Technext (`POST /api/tickets/search`).
 3. Usuário informa e confirma o nome completo antes de visualizar o PIX.
 4. Frontend busca PIX no backend (`GET /api/pix`).
-5. Usuário copia o PIX.
-6. Após 10 segundos da cópia do PIX, o frontend dispara automaticamente a validação do ticket, sem exigir clique em confirmação de pagamento.
+5. Usuário copia o PIX, ou aguarda caso não copie.
+6. Após a cópia, o frontend valida automaticamente em 10 segundos; se o usuário não copiar, a contagem começa 10 segundos depois, validando em até 20 segundos sem clique de confirmação.
 7. Backend gera placa fictícia e valida ticket (`POST /api/tickets/validate`).
 8. Após sucesso do PUT de validação, backend registra log na aba `validacoes` do Google Sheets (A:data_entrada, B:data_validacao, C:numero_ticket, D:nome_completo).
 9. Se o Google Sheets falhar, a validação permanece concluída; o erro é apenas logado no servidor.
