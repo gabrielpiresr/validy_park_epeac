@@ -16,6 +16,10 @@ type TicketData = {
   status?: string;
 };
 
+type ValidationOutcome =
+  | { success: true; generatedPlate: string; newTolerance: string }
+  | { success: false; message: string };
+
 type BarcodeDetectorLike = {
   detect: (image: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
 };
@@ -97,6 +101,7 @@ function HomePageContent() {
   const scannerStreamRef = useRef<MediaStream | null>(null);
   const scannerLoopRef = useRef<number | null>(null);
   const autoValidationStartedRef = useRef(false);
+  const validationRequestRef = useRef<Promise<ValidationOutcome> | null>(null);
 
   useEffect(() => {
     if (step !== "payment" || !paymentStart) return;
@@ -164,6 +169,7 @@ function HomePageContent() {
       setPaymentStart(null);
       setHasCopiedPix(false);
       autoValidationStartedRef.current = false;
+      validationRequestRef.current = null;
       setStep("identify");
     } catch (err) {
       setError(
@@ -176,13 +182,55 @@ function HomePageContent() {
     }
   }
 
+  function startTicketValidation(ticket: TicketData, confirmedFullName: string) {
+    if (validationRequestRef.current) return validationRequestRef.current;
+
+    if (isTestMode) {
+      validationRequestRef.current = Promise.resolve({
+        success: true,
+        generatedPlate: createFakePlateFromName(confirmedFullName),
+        newTolerance: estimateTolerancePlusOneDay(ticket.tolerancia)
+      });
+      return validationRequestRef.current;
+    }
+
+    validationRequestRef.current = fetch("/api/tickets/validate", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticket, fullName: confirmedFullName })
+    })
+      .then(async (response): Promise<ValidationOutcome> => {
+        const payload = await response.json();
+        if (!response.ok) {
+          return { success: false, message: payload.message || "Não foi possível validar o ticket" };
+        }
+
+        return {
+          success: true,
+          generatedPlate: payload.placaGerada || "-",
+          newTolerance: payload.nova_tolerancia || "-"
+        };
+      })
+      .catch((): ValidationOutcome => ({ success: false, message: "Não foi possível validar o ticket" }));
+
+    return validationRequestRef.current;
+  }
+
   async function handleConfirmFullName() {
     setError("");
 
-    if (fullName.trim().split(/\s+/).length < 2) {
+    const confirmedFullName = fullName.trim();
+    if (confirmedFullName.split(/\s+/).length < 2) {
       setError("Digite seu nome completo para continuar.");
       return;
     }
+
+    if (!ticketData) {
+      setError("Não foi possível validar o ticket");
+      return;
+    }
+
+    startTicketValidation(ticketData, confirmedFullName);
 
     setLoading(true);
     try {
@@ -211,40 +259,24 @@ function HomePageContent() {
       return;
     }
 
-    if (fullName.trim().split(/\s+/).length < 2) {
+    const confirmedFullName = fullName.trim();
+    if (confirmedFullName.split(/\s+/).length < 2) {
       setError("Digite seu nome completo para continuar.");
       return;
     }
 
-    const requestUrl = "/api/tickets/validate";
-    const requestBody = { ticket: ticketData, fullName: fullName.trim() };
-
-    if (isTestMode) {
-      setGeneratedPlate(createFakePlateFromName(fullName.trim()));
-      setNewTolerance(estimateTolerancePlusOneDay(ticketData.tolerancia));
-      setStep("done");
-      return;
-    }
-
     setLoading(true);
-    try {
-      const response = await fetch(requestUrl, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody)
-      });
+    const outcome = await startTicketValidation(ticketData, confirmedFullName);
 
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.message || "Não foi possível validar o ticket");
-
-      setGeneratedPlate(payload.placaGerada || "-");
-      setNewTolerance(payload.nova_tolerancia || "-");
+    if (outcome.success) {
+      setGeneratedPlate(outcome.generatedPlate);
+      setNewTolerance(outcome.newTolerance);
       setStep("done");
-    } catch {
-      setError("Não foi possível validar o ticket");
-    } finally {
-      setLoading(false);
+    } else {
+      setError(outcome.message);
     }
+
+    setLoading(false);
   }
 
   async function handleCopyPix() {
